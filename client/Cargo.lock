@@ -682,9 +682,9 @@ dependencies = [
 
 [[package]]
 name = "rsa_rs"
-version = "0.1.2"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb9e84f4aa78d07aeb3985e03d012b895f1122357dfa4e3495ddd8cb769656d0"
+checksum = "8ad504ce2e2658e6ca1fedb335db22354bd6e0b4b8ba5b524ff0019dd78f696d"
 dependencies = [
  "rand",
 ]

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::error::Error;
 use clap::Parser; 
 use rsa_rs::encryption::encrypt::encrypt_string;
 use rsa_rs::keys::keypair::*;
@@ -10,26 +12,66 @@ struct Cli {
     url: String,
 }
 
+struct Message {
+    text: String,
+}
+
+impl Message {
+    fn as_str(&self) -> &str {
+        self.text.as_str()
+    }
+
+    fn text(&self) -> String {
+        self.text.clone()
+    }
+
+    fn encrypt(&self, public_key: &PublicKey) -> EncryptedMessage {
+        let enc_vec = encrypt_string(&self.text, public_key);
+        let e = public_key.public_exponent_clone();
+        let n = public_key.modulus_clone();
+        let key = PublicKey { public_exponent: e, modulus: n };
+        EncryptedMessage { message: enc_vec, public_key :key }
+    }
+}
+
+struct EncryptedMessage {
+    message: Vec<u128>,
+    public_key: PublicKey,
+}
+
+impl EncryptedMessage {
+    fn from(message: Message, public_key: &PublicKey) -> EncryptedMessage {
+        message.encrypt(public_key)
+    }
+
+    fn to_string(&self) -> String {
+        vec_u128_to_string(&self.message)
+    }
+}
+
 /// clear the terminal screen
 fn cls() {
     print!("{}[2J", 27 as char);
 }
 
-fn display_tui(msg_list: &mut Vec<String>) {
-    cls();
+fn display_tui(msg_list: &Vec<Message>) {
+    //cls();
     for message in msg_list {
-        dbg!(message);
+        let text = message.as_str();
+        println!("{text}");
     }
 }
 
-fn read_input(buf: &mut String) {
+fn read_input() -> String {
+    let mut buf = String::new();
     println!("Enter to refresh: ");
-    std::io::stdin().read_line(buf).unwrap();
+    std::io::stdin().read_line(&mut buf).unwrap();
+    return buf;
 }
 
-fn handle_message(message: &String, public_key: &PublicKey, enc_msg_list: &mut Vec<Vec<u128>>) {
-    let enc_vec = encrypt_string(&message, public_key);
-    enc_msg_list.push(enc_vec);
+fn write_encrypted_message_to_file(message: Message, public_key: &PublicKey, url: &String, path: &String) {
+    let encrypted_message = message.encrypt(public_key);
+    std::fs::write(path.as_str(), encrypted_message.to_string()).expect("Error writing to outfile.txt");
 }
 
 fn vec_u128_to_string(data: &Vec<u128>) -> String {
@@ -42,13 +84,16 @@ fn vec_u128_to_string(data: &Vec<u128>) -> String {
     return s;
 }
 
-fn post_data(url: &String, data: &Vec<Vec<u128>>) {
-    let data = data.last().expect("Error extracting data");
-    let data = vec_u128_to_string(data);
+fn post_encrypted_message(url: &String) -> Result<(), Box<dyn Error>> {
+    let file = std::fs::File::open("outfile.txt").expect("could not open outfile.txt");
+
+    let body = reqwest::blocking::Body::new(file);
+
     let client = reqwest::blocking::Client::new();
-    let res = client.post(url)
-        .body(data)
-        .send().expect("Failed to post data");
+    
+    let res = client.post(url).body(body).send()?; 
+    dbg!(&res);
+    Ok(())
 }
 
 fn get_data(url: &String) -> Vec<Vec<u128>> {
@@ -99,29 +144,38 @@ fn decrypt_data(data: &Vec<Vec<u128>>, private_key: &PrivateKey) -> Vec<String> 
     return decrypted_string_vec;
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
+    std::env::set_var("RUST_BACKTRACE", "1");
+
     let args = Cli::parse();
     let base_url = args.url;
     let post_url = base_url.clone() + "/post";
     let get_url = base_url.clone() + "/get";
 
+    let outfile_path = String::from("outfile.txt");
+
     let key_pair = KeyPair::generate_key_pair(65537);
     
-    let mut message = String::new();
-    let mut msg_list: Vec<String> = Vec::new();
-    let mut enc_msg_list: Vec<Vec<u128>> = Vec::new();
-
-    loop {
+    let mut msg_list: Vec<Message> = Vec::new();
+    
+    let mut i = 0;
+    while i < 5 {
         display_tui(&mut msg_list);
-        read_input(&mut message);
+        let input_string = read_input();
+        let message = Message { text: input_string };
         match message.as_str() {
             "\r\n" => continue,
-            _ => handle_message(&message, &key_pair.public_key(), &mut enc_msg_list)
+            _ => write_encrypted_message_to_file(message, &key_pair.public_key(), &post_url, &outfile_path)
         }
-        post_data(&post_url, &enc_msg_list);
-        let incoming_enc_msg_list = get_data(&get_url);
-        msg_list = decrypt_data(&incoming_enc_msg_list, &key_pair.private_key());
+        post_encrypted_message(&post_url).expect("Errpr posting encrypted message");
+
+        //let incoming_enc_msg_list = get_data(&get_url);
+        //msg_list = decrypt_data(&incoming_enc_msg_list, &key_pair.private_key());
+        
+        i += 1;
     }
+
+    Ok(())
 }
 
 

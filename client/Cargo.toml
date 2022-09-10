@@ -9,4 +9,4 @@ edition = "2021"
 reqwest = { version = "0.11.11", features = ["blocking", "json"] }
 gthread = { git = "https://github.com/leninRessurect/gthread", branch = "master" }
 clap = { version = "3.2.20", features = ["derive"] }
-rsa_rs = "0.1.2"
+rsa_rs = "0.1.4"

@@ -6,7 +6,7 @@ use std::{
 use gthread::ThreadPool;
 
 fn handle_connection(mut stream: TcpStream, mut msg_vec: Vec<String>) {
-    let mut buffer = [0; 500];
+    let mut buffer = [0; 1000];
     // reads bytes into buffer 
     stream.read(&mut buffer).unwrap();
 
@@ -27,8 +27,8 @@ fn handle_connection(mut stream: TcpStream, mut msg_vec: Vec<String>) {
     stream.flush().unwrap();
 }
 
-fn handle_post(mut buffer: &[u8; 500], mut msg_vec: Vec<String>) -> String {
-    dbg!(&buffer);
+fn handle_post(mut buffer: &[u8; 1000], mut msg_vec: Vec<String>) -> String {
+    
     String::from("HTTP/1.1 200 OK")
 }
 
