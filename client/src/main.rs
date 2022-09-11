@@ -1,6 +1,8 @@
-use std::collections::HashMap;
 use std::error::Error;
 use clap::Parser; 
+use reqwest::header::CONTENT_TYPE;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use rsa_rs::encryption::encrypt::encrypt_string;
 use rsa_rs::keys::keypair::*;
 use rsa_rs::encryption::decrypt::decrypt_string;
@@ -30,10 +32,11 @@ impl Message {
         let e = public_key.public_exponent_clone();
         let n = public_key.modulus_clone();
         let key = PublicKey { public_exponent: e, modulus: n };
-        EncryptedMessage { message: enc_vec, public_key :key }
+        EncryptedMessage { message: enc_vec, public_key: key }
     }
 }
 
+#[derive(Debug, Deserialize, Serialize)]
 struct EncryptedMessage {
     message: Vec<u128>,
     public_key: PublicKey,
@@ -49,10 +52,16 @@ impl EncryptedMessage {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+struct JsonResponse {
+    json: HashMap<String, String>,
+}
+
 /// clear the terminal screen
 fn cls() {
     print!("{}[2J", 27 as char);
 }
+
 
 fn display_tui(msg_list: &Vec<Message>) {
     //cls();
@@ -69,9 +78,10 @@ fn read_input() -> String {
     return buf;
 }
 
-fn write_encrypted_message_to_file(message: Message, public_key: &PublicKey, url: &String, path: &String) {
+async fn handle_message(message: Message, public_key: &PublicKey, url: &String, path: &String) -> Result<(), Box<dyn Error>> {
     let encrypted_message = message.encrypt(public_key);
-    std::fs::write(path.as_str(), encrypted_message.to_string()).expect("Error writing to outfile.txt");
+    
+    Ok(())
 }
 
 fn vec_u128_to_string(data: &Vec<u128>) -> String {
@@ -84,23 +94,13 @@ fn vec_u128_to_string(data: &Vec<u128>) -> String {
     return s;
 }
 
-fn post_encrypted_message(url: &String) -> Result<(), Box<dyn Error>> {
-    let file = std::fs::File::open("outfile.txt").expect("could not open outfile.txt");
+fn post_encrypted_file(url: &String, path: &String) -> Result<(), Box<dyn Error>> {
+    let file = std::fs::File::open(path).expect("could not open outfile.txt");
 
-    let body = reqwest::blocking::Body::new(file);
-
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::Client::new();
     
-    let res = client.post(url).body(body).send()?; 
-    dbg!(&res);
+    
     Ok(())
-}
-
-fn get_data(url: &String) -> Vec<Vec<u128>> {
-    let body = reqwest::blocking::get(url).expect("Error making get request")
-        .text().expect("Error getting text");
-    to_vec_vec_u128(&body)
-
 }
 
 fn to_vec_vec_u128(data: &String) -> Vec<Vec<u128>> {
@@ -144,7 +144,13 @@ fn decrypt_data(data: &Vec<Vec<u128>>, private_key: &PrivateKey) -> Vec<String> 
     return decrypted_string_vec;
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[derive(Debug, Deserialize, Serialize)]
+struct GETAPIResponse {
+    message: String,
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     std::env::set_var("RUST_BACKTRACE", "1");
 
     let args = Cli::parse();
@@ -155,19 +161,43 @@ fn main() -> Result<(), Box<dyn Error>> {
     let outfile_path = String::from("outfile.txt");
 
     let key_pair = KeyPair::generate_key_pair(65537);
+
+    let client = reqwest::Client::new();
     
     let mut msg_list: Vec<Message> = Vec::new();
     
     let mut i = 0;
     while i < 5 {
+        // get_messages()
+        let resp200 = client.get(&get_url)
+            .header(CONTENT_TYPE, "application/json")
+            .send()
+            .await?
+            .json::<GETAPIResponse>()
+            .await?;
+
+        println!("{:#?}", resp200);
+
+        // decrypt_messages()
+        
+        // display messages
         display_tui(&mut msg_list);
+
+        // input, encrypt and post message
         let input_string = read_input();
         let message = Message { text: input_string };
         match message.as_str() {
-            "\r\n" => continue,
-            _ => write_encrypted_message_to_file(message, &key_pair.public_key(), &post_url, &outfile_path)
+            "\r\n" => {
+                // get_messages(&mut msg_list)
+                continue;
+            },
+            _ => {
+                let enc_msg = message.encrypt(key_pair.public_key());
+                // post_enc_msg()
+
+            }
         }
-        post_encrypted_message(&post_url).expect("Errpr posting encrypted message");
+        
 
         //let incoming_enc_msg_list = get_data(&get_url);
         //msg_list = decrypt_data(&incoming_enc_msg_list, &key_pair.private_key());
