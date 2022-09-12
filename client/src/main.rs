@@ -1,15 +1,19 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::io::{Write, Read};
+use std::path::PathBuf;
+use std::str::from_utf8;
 use clap::Parser; 
 use rsa_rs::encryption::encrypt::encrypt_string;
 use rsa_rs::keys::keypair::*;
 use rsa_rs::encryption::decrypt::decrypt_string;
-
+use std::net::TcpStream;
 
 
 #[derive(Parser)]
 struct Cli {
     url: String,
+    //key_path: PathBuf,
 }
 
 struct Message {
@@ -144,38 +148,41 @@ fn decrypt_data(data: &Vec<Vec<u128>>, private_key: &PrivateKey) -> Vec<String> 
     return decrypted_string_vec;
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    std::env::set_var("RUST_BACKTRACE", "1");
-
+fn main() {
     let args = Cli::parse();
     let base_url = args.url;
-    let post_url = base_url.clone() + "/post";
-    let get_url = base_url.clone() + "/get";
 
-    let outfile_path = String::from("outfile.txt");
+    match TcpStream::connect(&base_url) {
+        Ok(mut stream) => {
+            println!("Succesfully connected to {}", base_url);
 
-    let key_pair = KeyPair::generate_key_pair(65537);
-    
-    let mut msg_list: Vec<Message> = Vec::new();
-    
-    let mut i = 0;
-    while i < 5 {
-        display_tui(&mut msg_list);
-        let input_string = read_input();
-        let message = Message { text: input_string };
-        match message.as_str() {
-            "\r\n" => continue,
-            _ => write_encrypted_message_to_file(message, &key_pair.public_key(), &post_url, &outfile_path)
+            let msg = b"Hello!";
+
+            stream.write(msg).unwrap();
+            println!("Sent Hello, awaiting reply...");
+
+            let mut data = [0 as u8; 6]; // using a 6 byte buffer
+            match stream.read_exact(&mut data) {
+                Ok(_) => {
+                    if &data == msg {
+                        println!("Reply is ok!");
+                    } else {
+                        let text = from_utf8(&data).unwrap();
+                        println!("Unexpected reply: {}", text);
+                    }
+                },
+                Err(e) => {
+                    println!("Failed to receive data: {}", e);
+                }
+            }
+            
+        },
+        Err(e) => {
+            println!("Failed to connect: {}", e);
         }
-        post_encrypted_message(&post_url).expect("Errpr posting encrypted message");
-
-        //let incoming_enc_msg_list = get_data(&get_url);
-        //msg_list = decrypt_data(&incoming_enc_msg_list, &key_pair.private_key());
-        
-        i += 1;
     }
 
-    Ok(())
+    println!("Terminated.");
 }
 
 

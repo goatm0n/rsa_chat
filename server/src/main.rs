@@ -1,56 +1,40 @@
 use std::{
-    fs::read_to_string,
-    io::prelude::*,
+    io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
 use gthread::ThreadPool;
 
-fn handle_connection(mut stream: TcpStream, mut msg_vec: Vec<String>) {
-    let mut buffer = [0; 1000];
-    // reads bytes into buffer 
-    stream.read(&mut buffer).unwrap();
-
-    // would be better done as a match
-    let get = b"GET /get HTTP/1.1\r\n";
-    let post = b"POST /post HTTP/1.1\r\n";
-    // request handling
-    let response: String = if buffer.starts_with(post) {
-        handle_post(&buffer, msg_vec) 
-    } else if buffer.starts_with(get) {
-        handle_get(&msg_vec)
-    } else {
-         handle_not_found()
-    };
-    
-
-    stream.write_all(response.as_bytes()).unwrap();
-    stream.flush().unwrap();
-}
-
-fn handle_post(mut buffer: &[u8; 1000], mut msg_vec: Vec<String>) -> String {
-    
-    String::from("HTTP/1.1 200 OK")
-}
-
-fn handle_get(mut msg_vec: &Vec<String>) -> String {
-
-    String::from("HTTP/1.1 200 OK")
-}
-
-fn handle_not_found() -> String {
-        String::from("HTTP/1.1 404 NOT FOUND")
+fn handle_connection(mut stream: TcpStream) {
+    let mut buffer: [u8; 1024] = [0; 1024];
+    while match stream.read(&mut buffer) {
+        Ok(size) => {
+            stream.write(&buffer[0..size]).unwrap();
+            true
+        },
+        Err(_) => {
+            println!("Error; Terminating connection with {}", stream.peer_addr().unwrap());
+            stream.shutdown(std::net::Shutdown::Both).unwrap();
+            false
+        }
+    } {}
 }
 
 fn main() {
-    let mut msg_vec: Vec<String> = Vec::new();
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
+    println!("Server listening on port 7878");
     let pool = ThreadPool::new(4);
-    for stream in listener.incoming().take(6) {
-        let stream = stream.unwrap();
-        let mut msg_vec_clone = msg_vec.clone();
-        pool.execute(|| {
-            handle_connection(stream, msg_vec_clone);
-        });
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                println!("New connection: {}", stream.peer_addr().unwrap());
+                pool.execute(|| {
+                    handle_connection(stream);
+                });
+            }
+            Err(e) => {
+                println!("Error: {}", e)
+            }
+        }
     }
     println!("Shutting down.");
 }
