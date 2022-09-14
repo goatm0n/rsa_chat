@@ -1,4 +1,4 @@
-use clap::Parser; 
+use clap::Parser;
  
 #[derive(Parser)]
 struct Cli {
@@ -11,19 +11,37 @@ async fn main() -> Result<(), reqwest::Error> {
     let base_url = args.url;
     let url = base_url + "/messages";
 
-    let new_msg = models::Message {text: "this is the second new message".into()};
-    let new_msg = reqwest::Client::new()
-        .post(url)
-        .json(&new_msg)
-        .send()
-        .await?;
-
-    let res = reqwest::get(url).await?;
+    let msg = models::Message {text: "this is a new message".into()};
+    let res = handlers::post_msg(&url, &msg).await?;
+    let res_status = res.status();
+    dbg!(res_status);
+   
+    let res = handlers::get_msg_list(&url).await?;
     let res_text = res.text().await?;
-
-    dbg!(res_text);
+    let msg_list = models::MessageList::from_string(&res_text);
+    dbg!(msg_list);
     
     Ok(())
+}
+
+mod handlers {
+    use reqwest::Response;
+    use super::models::Message;
+    
+    pub async fn get_msg_list(url: &String) -> Result<Response, reqwest::Error> {
+        let res = reqwest::get(url)
+            .await?;
+        Ok(res)
+    }
+
+    pub async fn post_msg(url: &String, msg: &Message) -> Result<Response, reqwest::Error> {
+        let new_msg = reqwest::Client::new()
+            .post(url)
+            .json(msg)
+            .send()
+            .await?;
+        Ok(new_msg)
+    }
 }
 
 mod convert {
@@ -87,6 +105,11 @@ mod models {
     pub struct EncryptedMessage {
         pub message: Vec<u128>,
     }
+    
+    #[derive(Debug, Deserialize, Serialize)]
+    pub struct MessageList {
+        pub items: Vec<Message>,
+    }
 
     impl Message {
         pub fn encrypt(&self, public_key: &PublicKey) -> EncryptedMessage {
@@ -100,6 +123,28 @@ mod models {
         }
         pub fn to_string(&self) -> String {
             convert::vec_u128_to_string(&self.message)
+        }
+    }
+
+    impl MessageList {
+        pub fn from_string(s: &String) -> MessageList {
+            let mut msg_json_string = String::new();
+            let mut msg_list: Vec<Message> = Vec::new();
+            for c in s.chars() {
+                match c {
+                    '[' => continue,
+                    ']' => continue,
+                    ',' => continue,
+                    '}' => {
+                        msg_json_string.push(c);
+                        let msg = Message {text: msg_json_string.clone()};
+                        msg_list.push(msg);
+                        msg_json_string.clear();
+                    },
+                    _ => msg_json_string.push(c),
+                }
+            }
+            MessageList {items: msg_list}
         }
     }
 }

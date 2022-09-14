@@ -102,6 +102,7 @@ dependencies = [
  "reqwest",
  "rsa_rs",
  "serde",
+ "serde_json",
  "tokio",
 ]
 
