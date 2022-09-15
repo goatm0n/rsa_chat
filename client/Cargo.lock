@@ -101,6 +101,7 @@ dependencies = [
  "clap",
  "reqwest",
  "rsa_rs",
+ "rsa_utils",
  "serde",
  "serde_json",
  "tokio",
@@ -709,6 +710,15 @@ checksum = "76fe2d322f3e63a66be6e0c5d6ee18d1e5501ca96b1db7664aaff3821ea83b19"
 dependencies = [
  "rand",
  "serde",
+]
+
+[[package]]
+name = "rsa_utils"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "973487ea5f28efec3ec55d72aa6f33eeecb0f444e8a319eb903bb1fbff1e5430"
+dependencies = [
+ "rsa_rs",
 ]
 
 [[package]]

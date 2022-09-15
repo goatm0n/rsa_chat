@@ -1,26 +1,62 @@
 use clap::Parser;
- 
+use std::path::PathBuf;
+use rsa_utils::io::{get_full_path, parse_key_file};
+
 #[derive(Parser)]
 struct Cli {
     url: String,
+    key_path: PathBuf, 
+}
+
+impl Cli {
+    fn key_path(&self) -> PathBuf {
+        get_full_path(&self.key_path)
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), reqwest::Error> {
+    // args 
     let args = Cli::parse();
+    let key_path = args.key_path();
+    let key_pair = parse_key_file(key_path);
     let base_url = args.url;
     let url = base_url + "/messages";
-
-    let msg = models::Message {text: "this is a new message".into()};
-    let res = handlers::post_msg(&url, &msg).await?;
-    let res_status = res.status();
-    dbg!(res_status);
-   
-    let res = handlers::get_msg_list(&url).await?;
-    let res_text = res.text().await?;
-    let msg_list = models::MessageList::from_string(&res_text);
-    dbg!(msg_list);
     
+    loop {
+        // io  
+        println!("/q to quit");
+        let input = tui::read_input();
+        if input == "/q\r\n" {
+            break; 
+        }
+        let msg = models::Message {text: input};
+        //
+    
+        // encrypt
+        let public_key = key_pair.public_key();
+        let msg = msg.encrypt(public_key);
+        //
+
+        // post 
+        let res = handlers::post_msg(&url, &msg).await?;
+        let res_status = res.status();
+        dbg!(res_status);
+        //
+
+        // get 
+        let res = handlers::get_msg_list(&url).await?;
+        let res_text = res.text().await?;
+        let msg_list = models::MessageList::from_string(&res_text);
+        dbg!(&msg_list);
+        //
+    
+        // decrypt
+        let private_key = key_pair.private_key();
+        let msg_list = msg_list.decrypt(private_key);
+        dbg!(msg_list);
+        //
+    }
     Ok(())
 }
 
@@ -89,8 +125,8 @@ mod convert {
 
 
 mod models {
-    use rsa_rs::encryption::encrypt::encrypt_string;
-    use rsa_rs::encryption::decrypt::decrypt_string;
+    use rsa_rs::encryption::encrypt;
+    use rsa_rs::encryption::decrypt;
     use rsa_rs::keys::keypair::{PublicKey, PrivateKey};
     use serde::{Deserialize, Serialize};
     use super::convert;
@@ -112,17 +148,27 @@ mod models {
     }
 
     impl Message {
-        pub fn encrypt(&self, public_key: &PublicKey) -> EncryptedMessage {
-            EncryptedMessage { message: encrypt_string(&self.text, public_key) }
+        pub fn encrypted_message(&self, public_key: &PublicKey) -> EncryptedMessage {
+            EncryptedMessage { message: encrypt::encrypt_string(&self.text, public_key) }
+        }
+        pub fn encrypt(&self, public_key: &PublicKey) -> Message {
+            let enc_msg = self.encrypted_message(public_key);
+            enc_msg.to_message()
+        }
+        pub fn decrypt(&self, private_key: &PrivateKey) -> Message {
+            let enc_vec = convert::to_vec_u128(&self.text); 
+            let decrypted_string = decrypt::decrypt_string(&enc_vec, private_key);
+            Message { text: decrypted_string }
         }
     }
 
     impl EncryptedMessage {
-        pub fn decrypt(&self, private_key: &PrivateKey) -> Message {
-            Message { text: decrypt_string(&self.message, private_key) }
-        }
         pub fn to_string(&self) -> String {
             convert::vec_u128_to_string(&self.message)
+        }
+        pub fn to_message(&self) -> Message {
+            let message_string = self.to_string();
+            Message { text: message_string }
         }
     }
 
@@ -146,6 +192,15 @@ mod models {
                     },
                     _ => msg_json_string.push(c),
                 }
+            }
+            MessageList {items: msg_list}
+        }
+
+        pub fn decrypt(&self, private_key: &PrivateKey) -> MessageList {
+            let mut msg_list: Vec<Message> = Vec::new();
+            for msg in self.items.iter() {
+                let msg = msg.decrypt(private_key);
+                msg_list.push(msg);
             }
             MessageList {items: msg_list}
         }
