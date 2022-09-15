@@ -26,35 +26,42 @@ async fn main() -> Result<(), reqwest::Error> {
     loop {
         // io  
         println!("/q to quit");
-        let input = tui::read_input();
-        if input == "/q\r\n" {
+        let mut input = tui::read_input();
+        input.pop();
+        input.pop();
+        if input == "/q" {
             break; 
         }
         let msg = models::Message {text: input};
         //
-    
-        // encrypt
-        let public_key = key_pair.public_key();
-        let msg = msg.encrypt(public_key);
-        //
+        
+        if !msg.text.is_empty() {
+            // encrypt
+            let public_key = key_pair.public_key();
+            let msg = msg.encrypt(public_key);
+            //
 
-        // post 
-        let res = handlers::post_msg(&url, &msg).await?;
-        let res_status = res.status();
-        dbg!(res_status);
-        //
+            // post 
+            let res = handlers::post_msg(&url, &msg).await?;
+            let res_status = res.status();
+            dbg!(res_status);
+            //
+        }
 
         // get 
         let res = handlers::get_msg_list(&url).await?;
         let res_text = res.text().await?;
         let msg_list = models::MessageList::from_string(&res_text);
-        dbg!(&msg_list);
         //
     
         // decrypt
         let private_key = key_pair.private_key();
         let msg_list = msg_list.decrypt(private_key);
         dbg!(msg_list);
+        //
+        
+        // display
+            
         //
     }
     Ok(())
