@@ -137,7 +137,10 @@ mod models {
                     ',' => continue,
                     '}' => {
                         msg_json_string.push(c);
-                        let msg = Message {text: msg_json_string.clone()};
+                        //let msg = Message {text: msg_json_string.clone()};
+                        let msg_json_string_clone = msg_json_string.clone();
+                        let msg_json_str = msg_json_string_clone.as_str();
+                        let msg: Message = serde_json::from_str(msg_json_str).unwrap();
                         msg_list.push(msg);
                         msg_json_string.clear();
                     },
