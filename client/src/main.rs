@@ -24,7 +24,7 @@ async fn main() -> Result<(), reqwest::Error> {
     let url = base_url + "/messages";
     
     loop {
-        // io  
+        // io
         println!("/q to quit");
         let mut input = tui::read_input();
         input.pop();
@@ -57,11 +57,13 @@ async fn main() -> Result<(), reqwest::Error> {
         // decrypt
         let private_key = key_pair.private_key();
         let msg_list = msg_list.decrypt(private_key);
-        dbg!(msg_list);
         //
         
         // display
-            
+        tui::cls();
+        for msg in msg_list.items.iter() {
+            println!("message: {}", &msg.text);
+        }
         //
     }
     Ok(())
