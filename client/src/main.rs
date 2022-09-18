@@ -44,7 +44,6 @@ async fn main() -> Result<(), reqwest::Error> {
             // post 
             let res = handlers::post_msg(&url, &msg).await?;
             let res_status = res.status();
-            dbg!(res_status);
             //
         }
 
