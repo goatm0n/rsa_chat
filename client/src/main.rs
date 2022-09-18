@@ -43,7 +43,7 @@ async fn main() -> Result<(), reqwest::Error> {
 
             // post 
             let res = handlers::post_msg(&url, &msg).await?;
-            let res_status = res.status();
+            let _res_status = res.status(); // some error handling to be done
             //
         }
 
@@ -98,21 +98,6 @@ mod convert {
             s += "\t";
         }
         return s;
-    }
-
-    pub fn to_vec_vec_u128(data: &String) -> Vec<Vec<u128>> {
-        let mut vec_vec_u128: Vec<Vec<u128>> = Vec::new();
-        let mut vec_string = String::new();
-        for c in data.chars() {
-            if c != '\n' {
-                vec_string.push(c);
-            } else {
-                let vec_u128 = to_vec_u128(&vec_string);
-                vec_vec_u128.push(vec_u128);
-                vec_string.clear();
-            }
-        }
-        return vec_vec_u128;
     }
 
     pub fn to_vec_u128(data: &String) -> Vec<u128> {
